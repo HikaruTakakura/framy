@@ -1,7 +1,12 @@
 use clap::{value_parser, Arg, ArgAction, Command};
 use exif::{In, Tag};
 use image::{imageops::FilterType, io::Reader, GenericImageView, Pixel, Rgba, RgbaImage};
-use std::{error::Error, fs::File, io::BufReader, path::Path};
+use std::{
+    error::Error,
+    fs,
+    io::{BufReader, Read},
+    path::Path,
+};
 
 type MyResult<T> = Result<T, Box<dyn Error>>;
 
@@ -9,6 +14,7 @@ type MyResult<T> = Result<T, Box<dyn Error>>;
 pub struct Config {
     padding: u32,
     size: u32,
+    outdir: String,
 }
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
@@ -43,6 +49,15 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .action(ArgAction::Set)
                 .value_parser(value_parser!(u32)),
         )
+        .arg(
+            Arg::new("outdir")
+                .short('o')
+                .long("outdir")
+                .value_name("OUTDIR")
+                .help("Output directory")
+                .default_value(".")
+                .action(ArgAction::Set),
+        )
         .get_matches();
 
     let filenames: Vec<String> = matches
@@ -52,8 +67,19 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
         .collect();
     let padding = *matches.get_one::<u32>("padding").unwrap();
     let size = *matches.get_one::<u32>("size").unwrap();
+    let mut outdir = matches.get_one::<String>("outdir").unwrap().to_string();
+    if !outdir.ends_with('/') {
+        outdir.push('/');
+    }
 
-    Ok((filenames, Config { padding, size }))
+    Ok((
+        filenames,
+        Config {
+            padding,
+            size,
+            outdir,
+        },
+    ))
 }
 
 fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
@@ -61,13 +87,13 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
         .map_err(|e| format!("{}: {}", img_path, e))?
         .decode()?;
 
-    let file = File::open(img_path)?;
+    let file = fs::File::open(img_path)?;
     let mut bufreader = BufReader::new(&file);
     let exifreader = exif::Reader::new();
     let exif = exifreader.read_from_container(&mut bufreader)?;
 
     let max_size = config.size - config.padding * 2;
-    img = img.resize(max_size, max_size, FilterType::Nearest);
+    img = img.resize(max_size, max_size, FilterType::Lanczos3);
 
     if let Some(orientation) = exif.get_field(Tag::Orientation, In::PRIMARY) {
         img = match orientation.value.get_uint(0) {
@@ -101,7 +127,11 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
         .split('.')
         .next()
         .unwrap();
-    let output_path = format!("{}_framed.png", img_name);
+    let output_name = format!("{}_framed.png", img_name);
+    let output_path = format!("{}{}", config.outdir, output_name);
+
+    fs::create_dir_all(&config.outdir)?;
+
     img.save(Path::new(output_path.as_str()))?;
     println!("{} done", img_path);
 
@@ -112,7 +142,7 @@ pub fn run(img_paths: Vec<String>, config: Config) -> MyResult<()> {
     for img_path in img_paths {
         if img_path == "-" {
             let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf).ok();
+            std::io::stdin().read_to_string(&mut buf).ok();
             let paths: Vec<String> = buf
                 .trim()
                 .parse::<String>()
