@@ -1,8 +1,6 @@
 use clap::{value_parser, Arg, ArgAction, Command, ValueHint};
 use exif::{In, Tag};
-use image::{
-    imageops::FilterType, io::Reader, GenericImageView, ImageFormat, Pixel, Rgba, RgbaImage,
-};
+use image::{imageops::FilterType, io::Reader, GenericImageView, Pixel, Rgba, RgbaImage};
 use std::{
     error::Error,
     fs,
@@ -12,12 +10,15 @@ use std::{
 
 type MyResult<T> = Result<T, Box<dyn Error>>;
 
+const AVAIRABLE_FORMAT: &str = "png jpg jpeg gif webp tiff";
+const DEFAULT_FORMAT: &str = "jpg";
+
 #[derive(Debug)]
 pub struct Config {
     padding: u32,
     size: u32,
     outdir: String,
-    format: ImageFormat,
+    format: String,
 }
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
@@ -68,8 +69,8 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .short('f')
                 .long("format")
                 .value_name("FORMAT")
-                .help("Output format (jpeg, png, gif, webp, tiff)")
-                .default_value("jpeg")
+                .help(format!("Output format ({})", AVAIRABLE_FORMAT))
+                .default_value(DEFAULT_FORMAT)
                 .action(ArgAction::Set),
         )
         .get_matches();
@@ -85,22 +86,24 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
     if !outdir.ends_with('/') {
         outdir.push('/');
     }
-    let format = match matches
+    let format_string = matches
         .get_one::<String>("format")
         .unwrap()
         .to_lowercase()
-        .as_str()
+        .to_string();
+
+    let format = if AVAIRABLE_FORMAT
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .contains(&format_string.as_str())
     {
-        "png" => ImageFormat::Png,
-        "jpg" => ImageFormat::Jpeg, // "jpg" is for backward compatibility
-        "jpeg" => ImageFormat::Jpeg,
-        "gif" => ImageFormat::Gif,
-        "webp" => ImageFormat::WebP,
-        "tiff" => ImageFormat::Tiff,
-        unknown => {
-            eprintln!("Unknown format {}. Use png instead.", unknown);
-            ImageFormat::Png
-        }
+        format_string
+    } else {
+        eprintln!(
+            "Unknown format {}. Use {} instead.",
+            format_string, DEFAULT_FORMAT
+        );
+        DEFAULT_FORMAT.to_string()
     };
 
     Ok((
@@ -159,12 +162,12 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
         .split('.')
         .next()
         .unwrap();
-    let output_name = format!("{}_framed.png", img_name);
+    let output_name = format!("{}_framed.{}", img_name, config.format);
     let output_path = format!("{}{}", config.outdir, output_name);
 
     fs::create_dir_all(&config.outdir)?;
 
-    img.save_with_format(Path::new(output_path.as_str()), config.format)?;
+    img.save(Path::new(output_path.as_str()))?;
     println!("{} done", img_path);
 
     Ok(())
