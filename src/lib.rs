@@ -20,6 +20,7 @@ pub struct Config {
     outdir: String,
     format: String,
     color: Rgb<u8>,
+    suffix: String,
 }
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
@@ -41,7 +42,7 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .long("padding")
                 .value_name("PADDING")
                 .help("Padding pixels")
-                .default_value("32")
+                .default_value("24")
                 .action(ArgAction::Set)
                 .value_parser(value_parser!(u32)),
         )
@@ -67,7 +68,6 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
         )
         .arg(
             Arg::new("format")
-                .short('f')
                 .long("format")
                 .value_name("FORMAT")
                 .help(format!("Output format ({})", AVAIRABLE_FORMAT))
@@ -83,6 +83,14 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .default_value("ffffff")
                 .action(ArgAction::Set),
         )
+        .arg(
+            Arg::new("suffix")
+                .long("suffix")
+                .value_name("SUFFIX")
+                .help("Suffix attached right after the filename")
+                .default_value("_framy")
+                .action(ArgAction::Set),
+        )
         .get_matches();
 
     let filenames: Vec<String> = matches
@@ -90,18 +98,21 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
         .unwrap()
         .map(|s| s.to_string())
         .collect();
+
     let padding = *matches.get_one::<u32>("padding").unwrap();
+
     let size = *matches.get_one::<u32>("size").unwrap();
+
     let mut outdir = matches.get_one::<String>("outdir").unwrap().to_string();
     if !outdir.ends_with('/') {
         outdir.push('/');
     }
+
     let format_string = matches
         .get_one::<String>("format")
         .unwrap()
         .to_lowercase()
         .to_string();
-
     let format = if AVAIRABLE_FORMAT
         .split_whitespace()
         .collect::<Vec<&str>>()
@@ -128,6 +139,15 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
         Rgb::from([255, 255, 255])
     };
 
+    let mut suffix = matches.get_one::<String>("suffix").unwrap().to_string();
+    if !suffix.is_ascii() {
+        eprintln!("Invalid suffix. Use framy instead.");
+        suffix = "framy".to_string();
+    }
+    if suffix.len() > 0 {
+        suffix = format!("{}", suffix);
+    }
+
     Ok((
         filenames,
         Config {
@@ -136,6 +156,7 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
             outdir,
             format,
             color,
+            suffix,
         },
     ))
 }
@@ -185,7 +206,7 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
         .split('.')
         .next()
         .unwrap();
-    let output_name = format!("{}_framed.{}", img_name, config.format);
+    let output_name = format!("{}{}.{}", img_name, config.suffix, config.format);
     let output_path = format!("{}{}", config.outdir, output_name);
 
     fs::create_dir_all(&config.outdir)?;
