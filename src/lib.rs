@@ -1,6 +1,6 @@
 use clap::{value_parser, Arg, ArgAction, Command, ValueHint};
 use exif::{In, Tag};
-use image::{imageops::FilterType, io::Reader, GenericImageView, Pixel, Rgba, RgbaImage};
+use image::{imageops::FilterType, io::Reader, GenericImageView, Pixel, Rgb, RgbImage};
 use std::{
     error::Error,
     fs,
@@ -19,6 +19,7 @@ pub struct Config {
     size: u32,
     outdir: String,
     format: String,
+    color: Rgb<u8>,
 }
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
@@ -73,6 +74,15 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .default_value(DEFAULT_FORMAT)
                 .action(ArgAction::Set),
         )
+        .arg(
+            Arg::new("color")
+                .short('c')
+                .long("color")
+                .value_name("COLOR")
+                .help("Frame color (hex)")
+                .default_value("ffffff")
+                .action(ArgAction::Set),
+        )
         .get_matches();
 
     let filenames: Vec<String> = matches
@@ -106,6 +116,18 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
         DEFAULT_FORMAT.to_string()
     };
 
+    let color_hex = matches.get_one::<String>("color").unwrap();
+    let color = if color_hex.len() == 6 && color_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        Rgb::from([
+            u8::from_str_radix(&color_hex[0..2], 16)?,
+            u8::from_str_radix(&color_hex[2..4], 16)?,
+            u8::from_str_radix(&color_hex[4..6], 16)?,
+        ])
+    } else {
+        eprintln!("Invalid color. Use white instead.");
+        Rgb::from([255, 255, 255])
+    };
+
     Ok((
         filenames,
         Config {
@@ -113,6 +135,7 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
             size,
             outdir,
             format,
+            color,
         },
     ))
 }
@@ -147,11 +170,11 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
         ((config.size - w) / 2, config.padding)
     };
 
-    let img = RgbaImage::from_fn(config.size, config.size, |x, y| {
+    let img = RgbImage::from_fn(config.size, config.size, |x, y| {
         if x < padding_x || x >= padding_x + w || y < padding_y || y >= padding_y + h {
-            Rgba::from([255, 255, 255, 255])
+            config.color
         } else {
-            img.get_pixel(x - padding_x, y - padding_y).to_rgba()
+            img.get_pixel(x - padding_x, y - padding_y).to_rgb()
         }
     });
 
