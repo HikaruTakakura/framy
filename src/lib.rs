@@ -1,6 +1,8 @@
-use clap::{value_parser, Arg, ArgAction, Command};
+use clap::{value_parser, Arg, ArgAction, Command, ValueHint};
 use exif::{In, Tag};
-use image::{imageops::FilterType, io::Reader, GenericImageView, Pixel, Rgba, RgbaImage};
+use image::{
+    imageops::FilterType, io::Reader, GenericImageView, ImageFormat, Pixel, Rgba, RgbaImage,
+};
 use std::{
     error::Error,
     fs,
@@ -15,6 +17,7 @@ pub struct Config {
     padding: u32,
     size: u32,
     outdir: String,
+    format: ImageFormat,
 }
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
@@ -27,7 +30,8 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .value_name("FILE")
                 .help("Input file(s)")
                 .default_value("-")
-                .action(ArgAction::Append),
+                .action(ArgAction::Append)
+                .value_hint(ValueHint::AnyPath),
         )
         .arg(
             Arg::new("padding")
@@ -56,6 +60,16 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
                 .value_name("OUTDIR")
                 .help("Output directory")
                 .default_value(".")
+                .action(ArgAction::Set)
+                .value_hint(ValueHint::DirPath),
+        )
+        .arg(
+            Arg::new("format")
+                .short('f')
+                .long("format")
+                .value_name("FORMAT")
+                .help("Output format (jpeg, png, gif, webp, tiff)")
+                .default_value("jpeg")
                 .action(ArgAction::Set),
         )
         .get_matches();
@@ -71,6 +85,23 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
     if !outdir.ends_with('/') {
         outdir.push('/');
     }
+    let format = match matches
+        .get_one::<String>("format")
+        .unwrap()
+        .to_lowercase()
+        .as_str()
+    {
+        "png" => ImageFormat::Png,
+        "jpg" => ImageFormat::Jpeg, // "jpg" is for backward compatibility
+        "jpeg" => ImageFormat::Jpeg,
+        "gif" => ImageFormat::Gif,
+        "webp" => ImageFormat::WebP,
+        "tiff" => ImageFormat::Tiff,
+        unknown => {
+            eprintln!("Unknown format {}. Use png instead.", unknown);
+            ImageFormat::Png
+        }
+    };
 
     Ok((
         filenames,
@@ -78,6 +109,7 @@ pub fn get_args() -> MyResult<(Vec<String>, Config)> {
             padding,
             size,
             outdir,
+            format,
         },
     ))
 }
@@ -132,7 +164,7 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
 
     fs::create_dir_all(&config.outdir)?;
 
-    img.save(Path::new(output_path.as_str()))?;
+    img.save_with_format(Path::new(output_path.as_str()), config.format)?;
     println!("{} done", img_path);
 
     Ok(())
