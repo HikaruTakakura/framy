@@ -169,20 +169,24 @@ fn process_img(img_path: &str, config: &Config) -> MyResult<()> {
     let file = fs::File::open(img_path)?;
     let mut bufreader = BufReader::new(&file);
     let exifreader = exif::Reader::new();
-    let exif = exifreader.read_from_container(&mut bufreader)?;
+    let exif = exifreader
+        .read_from_container(&mut bufreader)
+        .map(Some)
+        .or_else(|_| Ok::<Option<exif::Exif>, exif::Error>(None))?;
 
     let max_size = config.size - config.padding * 2;
     img = img.resize(max_size, max_size, FilterType::Lanczos3);
 
-    if let Some(orientation) = exif.get_field(Tag::Orientation, In::PRIMARY) {
-        img = match orientation.value.get_uint(0) {
-            Some(3) => img.rotate180(),
-            Some(6) => img.rotate90(),
-            Some(8) => img.rotate270(),
-            _ => img,
-        }
-    };
-
+    if let Some(exif) = exif {
+        if let Some(orientation) = exif.get_field(Tag::Orientation, In::PRIMARY) {
+            img = match orientation.value.get_uint(0) {
+                Some(3) => img.rotate180(),
+                Some(6) => img.rotate90(),
+                Some(8) => img.rotate270(),
+                _ => img,
+            }
+        };
+    }
     let (w, h) = img.dimensions();
 
     let (padding_x, padding_y) = if w > h {
