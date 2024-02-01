@@ -25,7 +25,7 @@ pub struct Config {
 
 pub fn get_args() -> MyResult<(Vec<String>, Config)> {
     let matches = Command::new("framy")
-        .version("0.1.0")
+        .version("0.1.1")
         .author("Hikaru Takakura <takakurahikaru@gmail.com>")
         .about("add padding to image")
         .arg(
