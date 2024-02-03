@@ -1,6 +1,6 @@
 # Framy
 
-Framy is a command-line tool for adding frames to images. It allows you to specify the color and the padding of frames.
+Framy is a command-line tool that adds frames to images.
 
 ## Installation
 
@@ -30,7 +30,7 @@ framy images/horses.jpg --outdir images --color 000000 --suffix _black
 | images/horses_black.jpg | <img src="./images/horses_black.jpg" width="320px"> |
 
 ```sh
-# add frames only to images which have 'favorite' tag using pipeline
+#  add frames only to images that have a 'favorite' tag
 DIR=./images && mdfind -onlyin $DIR "kMDItemUserTags == favorite" | framy --outdir "${DIR}/_framy"
 
 tree ./images
